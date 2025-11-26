@@ -34,7 +34,6 @@
 - Organisation initiale du projet (définir ce qui sera testé, comparé, et intégré).
 
 ## Objectifs pour la semaine suivante
-
 - déploiement PocketBase sur AWS  
 - tests SQLite + realtime  
 - exploration Supabase cloud  
