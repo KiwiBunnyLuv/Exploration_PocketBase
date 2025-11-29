@@ -3,7 +3,10 @@
 📅 Date de rédaction : 26/11/2025
 
 ## Tâches réalisées
-
+création de compte aws impossible!
+exploration self-hosting
+creation projet
+creation compte supabase
 
 
 ## Apprentissages faits avec l’aide de l’IA
