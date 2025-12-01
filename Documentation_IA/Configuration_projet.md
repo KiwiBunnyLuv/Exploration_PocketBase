@@ -19,7 +19,6 @@ tout en respectant les exigences du projet et de l’enseignant.
 
 
 ## Instruction du projet 
-
 "Rédige tes réponses en tenant compte des consignes du projet 3.
 Rédige tes réponses en tenant compte de la grille de correction.
 Réflechis à tes réponses en tenant compte de la planification de la semaine.

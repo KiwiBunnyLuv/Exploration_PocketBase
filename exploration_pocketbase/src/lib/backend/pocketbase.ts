@@ -2,6 +2,9 @@
 import PocketBase from 'pocketbase';
 import type { Backend, Task } from '$lib/types';
 
+console.log("PocketBase loaded:", import.meta.env.VITE_PB_URL);
+
+
 // ⚠️ L'URL sera définie dans .env
 const pb = new PocketBase(import.meta.env.VITE_PB_URL);
 
