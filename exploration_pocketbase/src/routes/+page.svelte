@@ -3,20 +3,25 @@
   import { backend } from '$lib/backend';
   import type { Task } from '$lib/types';
   import { backendInfo } from '$lib/backend';
+  import { measureExecution } from '$lib/utils/measure';
 
   let tasks: Task[] = [];
   let newTitle = '';
   let loading = false;
   let errorMessage = '';
-  export let showDescription = true;
+  let duration = 0; // <-- temps de réponse mesuré
+  let thousandAddedButton = false;
 
+
+  // Charger les tâches avec mesure de performance
   async function loadTasks() {
     loading = true;
     errorMessage = '';
+
     try {
-      tasks = await backend.listTasks();
+      const { result, duration: d } = await measureExecution(() => backend.listTasks());
+      tasks = result;
     } catch (e) {
-      console.error(e);
       errorMessage = "Erreur lors du chargement des tâches";
     } finally {
       loading = false;
@@ -25,13 +30,16 @@
 
   async function addTask() {
     if (!newTitle.trim()) return;
+
     loading = true;
     try {
-      await backend.addTask(newTitle.trim());
+      const { duration: d } = await measureExecution(() =>
+        backend.addTask(newTitle.trim())
+      );
+      duration = d;
       newTitle = '';
       await loadTasks();
     } catch (e) {
-      console.error(e);
       errorMessage = "Erreur lors de l'ajout";
     } finally {
       loading = false;
@@ -41,10 +49,12 @@
   async function toggleTask(task: Task) {
     loading = true;
     try {
-      await backend.toggleTask(task.id, !task.completed);
+      const { duration: d } = await measureExecution(() =>
+        backend.toggleTask(task.id, !task.completed)
+      );
+      duration = d;
       await loadTasks();
     } catch (e) {
-      console.error(e);
       errorMessage = "Erreur lors de la mise à jour";
     } finally {
       loading = false;
@@ -54,10 +64,13 @@
   async function deleteTask(task: Task) {
     loading = true;
     try {
-      await backend.deleteTask(task.id);
+      const { duration: d } = await measureExecution(() =>
+        backend.deleteTask(task.id)
+      );
+      duration = d;
+
       await loadTasks();
     } catch (e) {
-      console.error(e);
       errorMessage = "Erreur lors de la suppression";
     } finally {
       loading = false;
@@ -65,7 +78,119 @@
   }
 
   onMount(loadTasks);
+
+
+    async function addThousandTask() {
+    if (!newTitle.trim()) return;
+
+    loading = true;
+    try {
+      const { duration: d } = await measureExecution(async () => {
+        const promises: Promise<unknown>[] = [];
+        for (let i = 0; i < 100000; i++) {
+
+          await backend.addTask(`Task ${i + 1}`);
+          console.log(`Ajout de la tâche ${i + 1}/1000`);
+        }
+        await Promise.all(promises);
+      });
+      duration = d;
+      newTitle = '';
+      await loadTasks();
+    } catch (e) {
+      errorMessage = "Erreur lors de l'ajout";
+    } finally {
+      loading = false;
+    }
+  }
 </script>
+
+<!-- CONTAINER -->
+<div class="max-w-xl mx-auto mt-10 p-6 bg-white rounded-xl shadow-lg border border-gray-200">
+
+  <h1 class="text-2xl font-bold mb-4 text-center">PocketTasks — CRUD multi-backend</h1>
+
+  <!-- Erreur -->
+  {#if errorMessage}
+    <p class="text-red-500 font-medium text-center mb-3">{errorMessage}</p>
+  {/if}
+
+  <!-- FORMULAIRE -->
+  <form on:submit|preventDefault={addTask} class="flex gap-2 mb-4">
+    <input
+      placeholder="Nouvelle tâche..."
+      bind:value={newTitle}
+      class="flex-1 px-3 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-400 outline-none"
+    />
+
+    <button
+      disabled={loading}
+      class="px-4 py-2 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 disabled:bg-gray-400 transition"
+    >
+      Ajouter
+    </button>
+    <button
+      type="button"
+      on:click={addThousandTask}
+      disabled={loading}
+      class="px-4 py-2 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 disabled:bg-gray-400 transition"
+    >
+      Ajouter 1000 tasks
+    </button>
+  </form>
+
+  <!-- Indicateur de performance -->
+  {#if duration > 0}
+    <div class="mt-2 mb-4 p-2 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium">
+      ⏱ Temps de réponse : <span class="font-bold">{duration} ms</span>
+    </div>
+  {/if}
+
+  <!-- LOADING -->
+  {#if loading}
+    <p class="text-center text-indigo-600 font-semibold">Chargement...</p>
+  {/if}
+
+  <!-- LISTE DES TÂCHES -->
+  <ul class="space-y-2 mt-4">
+    {#each tasks as task}
+      <li class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+        
+        <!-- Checkbox + titre -->
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={task.completed}
+            on:change={() => toggleTask(task)}
+            class="h-4 w-4 accent-indigo-600"
+          />
+          <span class={task.completed ? "line-through text-gray-400" : ""}>
+            {task.title}
+          </span>
+        </label>
+
+        <!-- Delete -->
+        <button
+          on:click={() => deleteTask(task)}
+          disabled={loading}
+          class="px-3 py-1 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:bg-gray-400 transition"
+        >
+          ❌
+        </button>
+      </li>
+    {/each}
+  </ul>
+
+  <!-- BACKEND INDICATOR -->
+  <div
+    class="mt-6 inline-flex items-center px-3 py-2 rounded-lg border-2 text-sm font-semibold"
+    style="border-color:{backendInfo.color}; color:{backendInfo.color};"
+  >
+    {backendInfo.name} — {backendInfo.description}
+  </div>
+
+</div>
+
 <style>
   .container {
     max-width: 600px;
@@ -175,40 +300,3 @@
     font-weight: bold;
   }
 </style>
-
-<div class="container">
-  <h1>PocketTasks — CRUD multi-backend</h1>
-
-  {#if errorMessage}
-    <p class="error">{errorMessage}</p>
-  {/if}
-
-  <form on:submit|preventDefault={addTask}>
-    <input placeholder="Nouvelle tâche..." bind:value={newTitle} />
-    <button disabled={loading}>Ajouter</button>
-  </form>
-
-  {#if loading}
-    <p class="loading">Chargement...</p>
-  {/if}
-
-  <ul>
-    {#each tasks as task}
-      <li>
-        <label>
-          <input type="checkbox" checked={task.completed} on:change={() => toggleTask(task)} />
-          {task.title}
-        </label>
-        <button class="delete-btn" on:click={() => deleteTask(task)} disabled={loading}>❌</button>
-      </li>
-    {/each}
-  </ul>
-
-  <!-- Backend Indicator -->
-  <div
-    class="backend-badge"
-    style="--color: {backendInfo.color};"
-  >
-    {backendInfo.name} — {backendInfo.description}
-  </div>
-</div>
