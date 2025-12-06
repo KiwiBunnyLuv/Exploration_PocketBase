@@ -10,7 +10,94 @@
   let loading = false;
   let errorMessage = '';
   let duration = 0; // <-- temps de réponse mesuré
+  let taskAdded = 0;
   let thousandAddedButton = false;
+
+  let benchCreate = 0;
+let benchRead = 0;
+let benchUpdate = 0;
+let benchDelete = 0;
+
+let benchRunning = false;
+let benchResultVisible = false;
+async function runBenchmark() {
+  if (!confirm("Lancer un benchmark complet ? Cela va créer, modifier et supprimer 1000 tâches.")) return;
+
+  benchRunning = true;
+  benchResultVisible = false;
+  errorMessage = '';
+
+  try {
+    // === CREATE 1000 ===
+    const { duration: c } = await measureExecution(async () => {
+      for (let i = 0; i < 1000; i++) {
+        await backend.addTask(`bench-${i}`);
+      }
+    });
+    benchCreate = c;
+
+    // === READ ===
+    const { duration: r, result: tasksResult } = await measureExecution(() =>
+      backend.listTasks()
+    );
+    benchRead = r;
+
+    // === UPDATE 1000 ===
+    const benchTasks = tasksResult.filter(t => t.title.startsWith("bench-"));
+    const { duration: u } = await measureExecution(async () => {
+      for (const t of benchTasks) {
+        await backend.toggleTask(t.id, !t.completed);
+      }
+    });
+    benchUpdate = u;
+
+    // === DELETE 1000 ===
+    const { duration: d } = await measureExecution(async () => {
+      for (const t of benchTasks) {
+        await backend.deleteTask(t.id);
+      }
+    });
+    benchDelete = d;
+
+    benchResultVisible = true;
+    await loadTasks();
+
+  } catch (e) {
+    console.error(e);
+    errorMessage = "Erreur durant le benchmark";
+  } finally {
+    benchRunning = false;
+  }
+}
+
+
+  async function deleteAllTasks() {
+  if (!confirm("Voulez-vous vraiment supprimer toutes les tâches ?")) return;
+
+  loading = true;
+  errorMessage = '';
+
+  try {
+    const { duration: d } = await measureExecution(async () => {
+      const batchSize = 50;
+
+      for (let i = 0; i < tasks.length; i += batchSize) {
+        const batch = tasks.slice(i, i + batchSize);
+        const promises = batch.map(t => backend.deleteTask(t.id));
+        await Promise.all(promises);
+        console.log(`Supprimé ${Math.min(i + batchSize, tasks.length)} / ${tasks.length}`);
+      }
+    });
+
+    duration = d;
+    await loadTasks();
+  } catch (e) {
+    errorMessage = "Erreur lors de la suppression massive";
+  } finally {
+    loading = false;
+  }
+}
+
 
 
   // Charger les tâches avec mesure de performance
@@ -18,9 +105,11 @@
     loading = true;
     errorMessage = '';
 
+
     try {
       const { result, duration: d } = await measureExecution(() => backend.listTasks());
       tasks = result;
+      taskAdded = result.length;
     } catch (e) {
       errorMessage = "Erreur lors du chargement des tâches";
     } finally {
@@ -145,6 +234,40 @@
       ⏱ Temps de réponse : <span class="font-bold">{duration} ms</span>
     </div>
   {/if}
+
+    {#if taskAdded > 0}
+    <div class="mt-2 mb-4 p-2 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium">
+      nombre de tâches : <span class="font-bold">{taskAdded}</span>
+    </div>
+  {/if}
+    <button
+    class="px-3 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 disabled:bg-gray-400 transition"
+    disabled={loading || taskAdded === 0}
+    on:click={deleteAllTasks}
+  >
+    Tout supprimer
+  </button>
+  <!-- Benchmark -->
+<div class="mt-6 p-4 bg-gray-50 border rounded-lg mb-3">
+  <h2 class="text-lg font-semibold mb-3">🏁 Benchmark complet</h2>
+
+  <button
+    on:click={runBenchmark}
+    disabled={benchRunning || loading}
+    class="px-4 py-2 rounded-lg bg-purple-600 text-white font-semibold hover:bg-purple-700 disabled:bg-gray-400 transition"
+  >
+    {benchRunning ? "Benchmark en cours..." : "Lancer le benchmark"}
+  </button>
+
+  {#if benchResultVisible}
+    <div class="mt-4 text-sm space-y-2">
+      <p>🟦 <strong>CREATE (1000)</strong> : {benchCreate} ms</p>
+      <p>🟩 <strong>READ</strong> : {benchRead} ms</p>
+      <p>🟧 <strong>UPDATE (1000)</strong> : {benchUpdate} ms</p>
+      <p>🟥 <strong>DELETE (1000)</strong> : {benchDelete} ms</p>
+    </div>
+  {/if}
+</div>
 
   <!-- LOADING -->
   {#if loading}
